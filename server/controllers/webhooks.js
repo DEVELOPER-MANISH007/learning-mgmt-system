@@ -1,5 +1,8 @@
 import { Webhook } from "svix";
 import UserModel from "../Models/userModel.js";
+import Stripe from "stripe";
+import Purchase from "../Models/Purchase.js";
+import { Course } from "../Models/Course.js";
 
 
 
@@ -51,4 +54,61 @@ import UserModel from "../Models/userModel.js";
     } catch (error) {
         res.json({success:false, error: error.message})
     }
+}
+
+ const stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY)
+
+export const stripeWebhooks  = async(req,res)=>{
+
+const sig = req.headers['stripe-signature']
+let event;
+try {
+    event = Stripe.webhooks.constructEvent(req.body,sig, process.env.STRIPE_WEBHOOK_SECRET)
+} catch (error) {
+    res.status(400).send(`Webhook Error:${error.message}`)
+}
+
+
+//todo handle event
+switch(event.type){
+
+    case 'payment_intent.succeeded':{
+        const paymentIntent = event.data.object
+        const paymentIntentId = paymentIntent.id
+
+        const session =  await stripeInstance.checkout.sessions.list({
+            payment_intent:paymentIntentId
+        })
+        const {purchaseId} = session.data[0].metadata
+        const purchaseData = await Purchase.findById(purchaseId)
+        const userData = await UserModel.findById(purchaseData.userId)
+        const courseData = await Course.findById(purchaseData.courseId.toString())
+        courseData.enrolledStudents.push(userData)
+        await courseData.save()
+        userData.enrolledCourses.push(courseData._id)
+        purchaseData.status = "completed"
+
+        break;
+    }
+    case 'payment_intent.payment_failed':{
+
+         const paymentIntent = event.data.object
+         const paymentIntentId = paymentIntent.id
+
+         const session =  await stripeInstance.checkout.sessions.list({
+            payment_intent:paymentIntentId
+        })
+           const {purchaseId} = session.data[0].metadata
+           const purchaseData = await Purchase.findById(purchaseId)
+           purchaseData.status = 'failed'
+           await purchaseData.save()
+           break;
+    }
+        default:
+            console.log(`Unhandled event type ${event.type}`)
+
+
+}
+res.json({received:true})
+
 }

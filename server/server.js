@@ -31,10 +31,7 @@ app.use(clerkMiddleware())
 app.get("/", (req, res) => {
   res.send("Welcome to the home page");
 });
-
-app.get("/loading/my-enrollments", (req, res) => {
-  res.send("Payment successful! Redirecting to your enrollments...");
-});
+app.get('/',(req,res)=>res.send("Api working"))
 app.post("/clerk", express.json(), clerkWebhook);
 app.use('/api/educator', express.json(), educatorRouter);
 app.use('/api/course', express.json(), courseRouter); 

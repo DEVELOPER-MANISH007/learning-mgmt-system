@@ -83,10 +83,12 @@ switch(event.type){
         const purchaseData = await Purchase.findById(purchaseId)
         const userData = await UserModel.findById(purchaseData.userId)
         const courseData = await Course.findById(purchaseData.courseId.toString())
-        courseData.enrolledStudents.push(userData)
+        courseData.enrolledStudents.push(userData._id)
         await courseData.save()
         userData.enrolledCourses.push(courseData._id)
+        await userData.save()
         purchaseData.status = "completed"
+        await purchaseData.save()
 
         break;
     }

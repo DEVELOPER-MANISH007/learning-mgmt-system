@@ -76,11 +76,11 @@ export const PurchaseCourse = async (req, res) => {
     ];
 
     // Ensure proper URL format
-    const baseUrl = origin && origin.startsWith('http') ? origin : 'http://localhost:5000';
+   
     
     const session = await stripeInstance.checkout.sessions.create({
-      success_url: `${baseUrl}/loading/my-enrollments`,
-      cancel_url: `${baseUrl}/`,
+      success_url: `${origin}/loading/my-enrollments`,
+      cancel_url: `${origin}/`,
       line_items: line_items,
       mode: 'payment',
       metadata: {

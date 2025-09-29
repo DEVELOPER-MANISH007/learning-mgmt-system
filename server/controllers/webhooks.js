@@ -64,8 +64,11 @@ const sig = req.headers['stripe-signature']
 let event;
 try {
     event = Stripe.webhooks.constructEvent(req.body,sig, process.env.STRIPE_WEBHOOK_SECRET)
+    console.log('Webhook received:', event.type)
 } catch (error) {
+    console.log('Webhook Error:', error.message)
     res.status(400).send(`Webhook Error:${error.message}`)
+    return
 }
 
 
@@ -73,22 +76,44 @@ try {
 switch(event.type){
 
     case 'payment_intent.succeeded':{
+        console.log('Payment succeeded, processing...')
         const paymentIntent = event.data.object
         const paymentIntentId = paymentIntent.id
 
-        const session =  await stripeInstance.checkout.sessions.list({
-            payment_intent:paymentIntentId
-        })
-        const {purchaseId} = session.data[0].metadata
-        const purchaseData = await Purchase.findById(purchaseId)
-        const userData = await UserModel.findById(purchaseData.userId)
-        const courseData = await Course.findById(purchaseData.courseId.toString())
-        courseData.enrolledStudents.push(userData)
-        await courseData.save()
-        userData.enrolledCourses.push(courseData._id)
-        await userData.save()
-        purchaseData.status = "completed"
-        await purchaseData.save()
+        try {
+            const session =  await stripeInstance.checkout.sessions.list({
+                payment_intent:paymentIntentId
+            })
+            console.log('Session data:', session.data[0])
+            
+            const {purchaseId} = session.data[0].metadata
+            console.log('Purchase ID:', purchaseId)
+            
+            const purchaseData = await Purchase.findById(purchaseId)
+            if (!purchaseData) {
+                console.log('Purchase not found:', purchaseId)
+                break
+            }
+            
+            const userData = await UserModel.findById(purchaseData.userId)
+            const courseData = await Course.findById(purchaseData.courseId.toString())
+            
+            // Update course enrollment
+            courseData.enrolledStudents.push(userData._id)
+            await courseData.save()
+            
+            // Update user enrollment
+            userData.enrolledCourses.push(courseData._id)
+            await userData.save()
+            
+            // Update purchase status
+            purchaseData.status = "completed"
+            await purchaseData.save()
+            
+            console.log('Payment processing completed successfully')
+        } catch (error) {
+            console.log('Error processing payment:', error.message)
+        }
 
         break;
     }

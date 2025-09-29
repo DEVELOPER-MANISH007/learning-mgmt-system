@@ -6,6 +6,8 @@ import conntectDB from "./config/mongodb.js";
 import { clerkMiddleware } from "@clerk/express";
 import { clerkWebhook, stripeWebhooks } from "./controllers/webhooks.js";
 import UserModel from "./Models/userModel.js";
+import Purchase from "./Models/Purchase.js";
+import { Course } from "./Models/Course.js";
 import educatorRouter from "./Routes/educatorRoutes.js";    
 import connectCloudinary from "./config/Cloudinary.js";
 import courseRouter from "./Routes/CourseRoutes.js";
@@ -35,12 +37,17 @@ app.post("/clerk", express.json(), clerkWebhook);
 app.use('/api/educator', express.json(), educatorRouter);
 app.use('/api/course', express.json(), courseRouter); 
 app.use("/api/user", express.json(),UserRouter);
-app.post('/stripe',express.raw({type:'application/json'}),stripeWebhooks)
+// Stripe webhook endpoint - must be before express.json() middleware
+app.post('/stripe', express.raw({type: 'application/json'}), stripeWebhooks);
 
-//*listen to server
 
-const PORT = process.env.PORT || 5000;
+//*listen to server (only when not running on Vercel serverless)
 
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
+if (!process.env.VERCEL) {
+  const PORT = process.env.PORT || 5000;
+  app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+  });
+}
+
+export default app;

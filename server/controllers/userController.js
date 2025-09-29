@@ -75,18 +75,25 @@ export const PurchaseCourse = async (req, res) => {
       },
     ];
 
-    // Ensure proper URL format
-   
+    // Ensure proper URL format - remove trailing slash and validate
+    let clientUrl = origin;
+    if (!clientUrl) {
+      clientUrl = 'http://localhost:5173'; // Default for development
+    }
+    // Remove trailing slash if present
+    clientUrl = clientUrl.replace(/\/$/, '');
     
     const session = await stripeInstance.checkout.sessions.create({
-      success_url: `${origin}/loading/my-enrollments`,
-      cancel_url: `${origin}/`,
+      success_url: `${clientUrl}/loading/my-enrollments`,
+      cancel_url: `${clientUrl}/`,
       line_items: line_items,
       mode: 'payment',
       metadata: {
         purchaseId: newPurchase._id.toString() 
       }
     })
+
+
 
     res.json({success :true,session_url:session.url})
   } catch (error) {

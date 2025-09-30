@@ -25,20 +25,23 @@ await connectCloudinary();
 //middleware
 
 app.use(cors());
-app.use(express.json());
 app.use(clerkMiddleware())
+
+// Stripe webhook endpoint - must be before express.json() middleware
+app.post('/stripe', express.raw({type: 'application/json'}), stripeWebhooks);
+
+// Parse JSON for all other routes below
+app.use(express.json());
 
 //*routes
 
 app.get("/", (req, res) => {
   res.send("Welcome to the home page");
 });
-app.post("/clerk", express.json(), clerkWebhook);
-app.use('/api/educator', express.json(), educatorRouter);
-app.use('/api/course', express.json(), courseRouter); 
-app.use("/api/user", express.json(),UserRouter);
-// Stripe webhook endpoint - must be before express.json() middleware
-app.post('/stripe', express.raw({type: 'application/json'}), stripeWebhooks);
+app.post("/clerk", clerkWebhook);
+app.use('/api/educator', educatorRouter);
+app.use('/api/course', courseRouter); 
+app.use("/api/user", UserRouter);
 
 
 //*listen to server (only when not running on Vercel serverless)

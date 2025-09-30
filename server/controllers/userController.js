@@ -46,13 +46,26 @@ export const PurchaseCourse = async (req, res) => {
         message: "Data not found (courseData or userData not found)",
       });
     }
+    // Prevent purchase if already enrolled
+    if (userData.enrolledCourses?.some((id) => id.toString() === courseId.toString())) {
+      return res.json({ success: false, message: "Already enrolled" });
+    }
+    // Prevent duplicate paid purchases
+    const existingPaid = await Purchase.findOne({ userId, courseId, status: "completed" });
+    if (existingPaid) {
+      return res.json({ success: false, message: "Course already purchased" });
+    }
+    // Ensure the course is available for purchase
+    if (courseData.isPublished === false) {
+      return res.json({ success: false, message: "Course not available" });
+    }
+    // Compute numeric discounted amount (dollars)
+    const discounted = courseData.courPrice * (1 - ((courseData.discount || 0) / 100));
+    const amountDollars = Math.round(discounted * 100) / 100; // keep 2dp as Number
     const purchaseData = {
       courseId: courseData._id,
       userId,
-      amount: (
-        courseData.courPrice -
-        (courseData.discount * courseData.courPrice) / 100
-      ).toFixed(2),
+      amount: amountDollars,
     };
     const newPurchase = await Purchase.create(purchaseData);
 
@@ -61,7 +74,7 @@ export const PurchaseCourse = async (req, res) => {
     const stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY);
     const currency = "usd"; // Hardcoded for testing
 
-    //create line itesm to for stripe
+    //TODO create line itesm to for stripe
     const line_items = [
       {
         price_data: {
@@ -69,7 +82,7 @@ export const PurchaseCourse = async (req, res) => {
           product_data: {
             name: courseData.courseTitle,
           },
-          unit_amount: Math.floor(parseFloat(newPurchase.amount)) * 100,
+          unit_amount: Math.round(amountDollars * 100),
         },
         quantity: 1,
       },

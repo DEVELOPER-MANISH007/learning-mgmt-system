@@ -63,7 +63,8 @@ export const stripeWebhooks  = async(req,res)=>{
 const sig = req.headers['stripe-signature']
 let event;
 try {
-    event = Stripe.webhooks.constructEvent(req.body,sig, process.env.STRIPE_WEBHOOK_SECRET)
+    // req.body is a Buffer because of express.raw()
+    event = Stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET)
     console.log('Webhook received:', event.type)
 } catch (error) {
     console.log('Webhook Error:', error.message)
@@ -81,17 +82,26 @@ switch(event.type){
         const paymentIntentId = paymentIntent.id
 
         try {
-            const session =  await stripeInstance.checkout.sessions.list({
-                payment_intent:paymentIntentId
+            const sessionList =  await stripeInstance.checkout.sessions.list({
+                payment_intent:paymentIntentId,
+                limit: 1
             })
-            console.log('Session data:', session.data[0])
-            
-            const {purchaseId} = session.data[0].metadata
+            const session = sessionList.data?.[0]
+            if (!session) {
+                console.log('No session found for intent:', paymentIntentId)
+                break
+            }
+            console.log('Session data:', session)
+            const {purchaseId} = session.metadata || {}
             console.log('Purchase ID:', purchaseId)
             
             const purchaseData = await Purchase.findById(purchaseId)
             if (!purchaseData) {
                 console.log('Purchase not found:', purchaseId)
+                break
+            }
+            if (purchaseData.status === 'completed') {
+                console.log('Purchase already completed, skipping')
                 break
             }
             
@@ -122,13 +132,19 @@ switch(event.type){
          const paymentIntent = event.data.object
          const paymentIntentId = paymentIntent.id
 
-         const session =  await stripeInstance.checkout.sessions.list({
-            payment_intent:paymentIntentId
+         const sessionList =  await stripeInstance.checkout.sessions.list({
+            payment_intent:paymentIntentId,
+            limit: 1
         })
-           const {purchaseId} = session.data[0].metadata
-           const purchaseData = await Purchase.findById(purchaseId)
-           purchaseData.status = 'failed'
-           await purchaseData.save()
+        const session = sessionList.data?.[0]
+        if (session?.metadata?.purchaseId) {
+            const {purchaseId} = session.metadata
+            const purchaseData = await Purchase.findById(purchaseId)
+            if (purchaseData) {
+                purchaseData.status = 'failed'
+                await purchaseData.save()
+            }
+        }
            break;
     }
         default:

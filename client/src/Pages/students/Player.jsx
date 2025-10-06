@@ -11,7 +11,6 @@ import { toast } from "react-toastify";
 import Loading from '../../Components/students/Loading'
 const Player = () => {
   const {
-    enrolledCourses,
     calculateChapterTime,
     backendUrl,
     userData,
@@ -28,24 +27,33 @@ const Player = () => {
     setOpenSection((prev) => ({ ...prev, [index]: !prev[index] }));
   };
 
-  const getCourseData = useCallback(() => {
-    enrolledCourses.map((course) => {
-      if (course._id === courseid) {
+  const fetchCourseData = useCallback(async () => {
+    try {
+      const token = await getToken();
+      const { data } = await axios.get(
+        `${backendUrl}/api/user/enrolled-courses/${courseid}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (data.success) {
+        const course = data.course;
         setCourseData(course);
-        course.courseRating.map((items) => {
-          if (items.userId === userData._id) {
-            setInitialRating(items.rating);
-          }
-        });
+        if (Array.isArray(course.courseRating)) {
+          const mine = course.courseRating.find(
+            (r) => r.userId === userData?._id
+          );
+          setInitialRating(mine?.rating || 0);
+        }
+      } else {
+        toast.error(data.message || "Failed to load course");
       }
-    });
-  }, [enrolledCourses, courseid, userData]);
+    } catch (error) {
+      toast.error(error.response?.data?.message || error.message);
+    }
+  }, [backendUrl, courseid, getToken, userData]);
 
   useEffect(() => {
-    if (enrolledCourses.length > 0) {
-      getCourseData();
-    }
-  }, [enrolledCourses, getCourseData]);
+    fetchCourseData();
+  }, [fetchCourseData]);
 
 
   const markLectureAsComplete = async () => {
@@ -129,21 +137,21 @@ useEffect(()=>{
           <div className="pt-5">
             {courseData &&
               Array.isArray(courseData.courseContent) &&
-              courseData.courseContent.map((chapter, index) => (
+              courseData.courseContent.map((chapter, chapterIndex) => (
                 <div
-                  key={index}
+                  key={chapterIndex}
                   className="border border-gray-300 bg-white mb-2 rounded"
                 >
                   <div
-                    onClick={() => toggleSection(index)}
+                    onClick={() => toggleSection(chapterIndex)}
                     className="flex items-center justify-between px-4 py-3 cursor-pointer select-none"
                   >
                     <div className="flex items-center gap-2">
                       <img
                         src={assets.down_arrow_icon}
                         alt="arrow icon"
-                        className={`transition-transform ${
-                          openSection[index] ? "rotate-180" : "rotate-0"
+                          className={`transition-transform ${
+                          openSection[chapterIndex] ? "rotate-180" : "rotate-0"
                         }`}
                       />
                       <p className="font-medium md:text-base text-sm">
@@ -159,14 +167,14 @@ useEffect(()=>{
                   </div>
                   <div
                     className={`overflow-hidden transition-all duration-300 ${
-                      openSection[index] ? "max-h-96" : "max-h-0"
+                      openSection[chapterIndex] ? "max-h-96" : "max-h-0"
                     }`}
                   >
                     <ul className="list-disc md:pl-10 pl-4 pr-4 py-2 text-gray-600 border-t border-gray-300">
                       {Array.isArray(chapter.chapterContent) &&
-                        chapter.chapterContent.map((lecture, index) => (
+                        chapter.chapterContent.map((lecture, lectureIndex) => (
                           <li
-                            key={index}
+                            key={lectureIndex}
                             className="flex items-center gap-2 py-1"
                           >
                             <img
@@ -182,8 +190,8 @@ useEffect(()=>{
                                     onClick={() =>
                                       setPlayerData({
                                         ...lecture,
-                                        chapter: index + 1,
-                                        lecture: index + 1,
+                                        chapter: chapterIndex + 1,
+                                        lecture: lectureIndex + 1,
                                       })
                                     }
                                     className="text-blue-500 cursor-pointer"

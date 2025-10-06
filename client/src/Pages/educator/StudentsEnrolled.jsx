@@ -1,20 +1,37 @@
-import React, { useEffect, useState } from 'react'
-import { dummyStudentEnrolled } from '../../assets/assets'
+import React, { useCallback, useContext, useEffect, useState } from 'react'
 import Loading from '../../Components/students/Loading'
+import { AppContext } from '../../context/Appcontext'
+import axios from 'axios'
+import { toast } from 'react-toastify'
 
 
 
 const StudentsEnrolled = () => {
 const [enrolledStudents, setEnrolledStudents] = useState([])
+const {backendUrl,getToken,isEducator} = useContext(AppContext)
 
-
-const fetchEnrolledStudents= async()=>{
-  setEnrolledStudents(dummyStudentEnrolled || [])
+const fetchEnrolledStudents= useCallback(async()=>{
+try {
+  const token = await getToken()
+  const {data} = await axios.get(backendUrl+'/api/educator/enrolled-students',{
+    headers:{Authorization:`Bearer ${token}`}
+  })
+  if(data.success){
+    setEnrolledStudents(data.enrolledStudents.reverse())
+  }else{
+    toast.error(data.message)
+  }
+} catch (error) {
+  toast.error(error.message)
 }
+}, [backendUrl, getToken])
+
 
 useEffect(()=>{
+ if(isEducator){
   fetchEnrolledStudents()
-},[])
+ }
+},[isEducator, fetchEnrolledStudents])
   
   return enrolledStudents && enrolledStudents.length > 0 ? (
     <div className='min-h-screen flex flex-col items-start justify-between md:p-8 md:pb-0 pt-8 pb-0'>

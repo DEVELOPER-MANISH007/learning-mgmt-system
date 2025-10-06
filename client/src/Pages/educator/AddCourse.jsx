@@ -1,33 +1,51 @@
-import React, { useEffect, useRef, useState } from "react";
-import uniqid from "uniqid";
+import React, { useContext, useEffect, useRef, useState } from "react";
+// import uniqid from "uniqid"; // Removed for browser compatibility
 import Quill from "quill";
 import { assets } from "../../assets/assets";
+import { AppContext } from "../../context/Appcontext";
+import { toast } from "react-toastify";
+import axios from "axios";
+
+
+
+
 
 const AddCourse = () => {
+
+const {backendUrl,getToken} = useContext(AppContext)
+
+
   const quillRef = useRef(null);
   const editorRef = useRef(null);
+  
+  // Generate unique ID for browser compatibility
+  const generateId = () => {
+    return Date.now().toString(36) + Math.random().toString(36).substr(2);
+  };
 
   const [courseTitle, setCourseTitle] = useState("");
-  const [, setCrousePrice] = useState(0);
-  const [, setDiscunt] = useState(0);
+  const [coursePrice, setCoursePrice] = useState(0);
+  const [discount, setDiscount] = useState(0);
   const [image, setImage] = useState(null);
   const [chapters, setChapters] = useState([]);
   const [showPopup, setShowPopup] = useState(false);
   const [currentChapterId, setCurrentChapterId] = useState(false);
   const [lectureDetails, setLectureDetails] = useState({
     lectureTitle: "",
-    lectureDuratin: "",
+    lectureDuration: "",
     lectureUrl: "",
     isPreviewFree: false,
   });
 
 
   const handleChapter = (action,chapterId)=>{
+
+
     if(action==='add'){
       const title = prompt("enter Chapter Name:")
       if(title){
         const newchapter = {
-          chapterId:uniqid(),
+          chapterId: generateId(),
           chapterTitle:title,
           chapterContent:[],
           collapsed:false,
@@ -83,7 +101,7 @@ const addLecture=()=>{
         const newLecture = {
           ...lectureDetails,
           lectureOrder: chapter.chapterContent.length > 0 ? chapter.chapterContent.slice(-1)[0].lectureOrder + 1 : 1,
-          lectureId: uniqid(),
+          lectureId: generateId(),
         };
         return { ...chapter, chapterContent: [...chapter.chapterContent, newLecture] };
       }
@@ -93,14 +111,46 @@ const addLecture=()=>{
   setShowPopup(false);
   setLectureDetails({
     lectureTitle:'',
-    lectureDuratin:'',
+    lectureDuration:'',
     lectureUrl:"",
     isPreviewFree:false,
   })
 }
 
 const handleSubmit = async(e)=>{
+try {
   e.preventDefault()
+if(!image){
+  toast.error("Thumbnail not selected")
+}
+const courseData = {
+courseTitle,
+courseDescription:quillRef.current.root.innerHTML,
+coursePrice:Number(coursePrice),
+discount:Number(discount),
+courseContent:chapters,
+}
+const formData = new FormData()
+formData.append('courseData',JSON.stringify(courseData))
+formData.append('image',image)
+const token  =  await getToken()
+  const {data} = await axios.post(backendUrl+'/api/educator/add-course',formData,{headers:{Authorization:`Bearer ${token}`}})
+if(data.success){
+  toast.success(data.message)
+  setCourseTitle('')
+  setCoursePrice(0)
+  setDiscount(0)
+  setImage(null)
+  setChapters([])
+  quillRef.current.root.innerHTML = ""
+}else{
+  toast.error(data.message)
+}
+
+} catch (error) {
+  toast.error(error.message)
+}
+
 }
 
 
@@ -141,9 +191,10 @@ const handleSubmit = async(e)=>{
 
         <div className="flex items-center justify-between flex-wrap">
           <div className="flex flex-col gap-1">
-            <p>Course Pirce</p>
+            <p>Course Price</p>
             <input
-              onChange={(e) => setCrousePrice(e.target.value)}
+              onChange={(e) => setCoursePrice(e.target.value)}
+              value={coursePrice}
               type="number"
               placeholder="0"
               className="outline-none md:py-2.5 py-2 w-28 px-3 rounded border border-gray-500 "
@@ -176,7 +227,7 @@ const handleSubmit = async(e)=>{
         </div>
         <div className="flex flex-col gap-1">
           <p>Discount %</p>
-          <input onChange={e=>setDiscunt(e.target.value)} type="number" placeholder="0" min={0} max={100} className="outline-none md:py-2.5 py-2 w-28 px-3 rounded border border-gray-500" required />
+          <input value={discount} onChange={e=>setDiscount(e.target.value)} type="number" placeholder="0" min={0} max={100} className="outline-none md:py-2.5 py-2 w-28 px-3 rounded border border-gray-500" required />
         </div>
 
 
@@ -199,7 +250,7 @@ const handleSubmit = async(e)=>{
             <div className="p-4">
               {chapter.chapterContent.map((lecture,lectureIndex)=>(
                 <div key={lectureIndex} className="flex justify-between items-center mb-2">
-                  <span>{lectureIndex+1}{lecture.lectureTitle}-{lecture.lectureDuratin} mins - <a href={lecture.lectureUrl} target="_blank" className="text-blue-500">Link</a>-{lecture.isPreviewFree?"Free Priview":"Paid"}  </span>
+                  <span>{lectureIndex+1}{lecture.lectureTitle}-{lecture.lectureDuration} mins - <a href={lecture.lectureUrl} target="_blank" className="text-blue-500">Link</a>-{lecture.isPreviewFree?"Free Priview":"Paid"}  </span>
                   <img onClick={()=>handleLecture('remove',chapter.chapterId,lectureIndex)} src={assets.cross_icon} alt="" className="cursor-pointer" />
                 </div>
               ))}
@@ -239,8 +290,8 @@ const handleSubmit = async(e)=>{
                 <input 
                   type="number" 
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 outline-none" 
-                  value={lectureDetails.lectureDuratin}  
-                  onChange={(e) =>setLectureDetails({...lectureDetails,lectureDuratin:e.target.value})}
+                  value={lectureDetails.lectureDuration}  
+                  onChange={(e) =>setLectureDetails({...lectureDetails,lectureDuration:e.target.value})}
                   placeholder="Enter duration"
                 />
               </div>

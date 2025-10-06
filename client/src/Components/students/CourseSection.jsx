@@ -15,7 +15,7 @@ const CourseSection  = () => {
         results.
       </p>
 <div className="grid grid-cols-auto px-4 md:px-0 md:my-16 my-10 gap-4">
-  {allCourses.slice(0,4).map((course,index)=> <CourseCard key={index} course={course} /> )}
+  {allCourses && allCourses.length > 0 ? allCourses.slice(0,4).map((course,index)=> <CourseCard key={course._id || index} course={course} /> ) : <p>Loading courses...</p>}
 </div>
       <Link
         className="text-gray-500 border border-gray-500/300 px-10 py-3 rounded inline-block mt-6"

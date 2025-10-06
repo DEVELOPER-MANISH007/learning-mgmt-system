@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from "react";
+import React, { useCallback, useContext, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { AppContext } from "../../context/Appcontext";
 import Loading from "../../Components/students/Loading";
@@ -6,6 +6,8 @@ import { assets } from "../../assets/assets";
 import humanizeDuration from "humanize-duration";
 import Footer from '../../Components/students/Footer'
 import YouTube from "react-youtube";
+import axios from "axios";
+import { toast } from "react-toastify";
 
 
 const CourseDetails = () => {
@@ -13,22 +15,73 @@ const CourseDetails = () => {
 
   const [courseData, setCourseData] = useState(null);
   const [openSection, setOpenSection] = useState({});
-  const [isAlreadyEnrolled] = useState(false);
+  const [isAlreadyEnrolled, setIsAlreadyEnrolled] = useState(false);
   const [playerData,setPlayerData] = useState (null)
 
   const {
-    allCourses,
     calclulaterating,
     calculateChapterTime,
     calculateCourseDuration,
     CalculateNOofLecutres,
     currency,
+    backendUrl,
+    userData,
+    navigate,
+    getToken,
   } = useContext(AppContext);
 
+
+  
+const fetchCourseData = useCallback(async () => {
+  try {
+    const {data} = await axios.get(`${backendUrl}/api/course/`+id)
+    if(data.success){
+      setCourseData(data.courseDetails)
+    }
+    else{
+      toast.error(data.message)
+    }
+  } catch (error) {
+    toast.error(error.message)
+  }
+}, [backendUrl, id])
+
+const enrollCourse = async () => {
+
+  try {
+    if(!userData){
+      toast.warning('Please login to enroll in this course')
+      return navigate('/sign-in')
+    }
+    if(isAlreadyEnrolled){
+      return toast.warning('You are already enrolled in this course')
+    }
+
+    const token = await getToken()
+    const {data} = await axios.post(`${backendUrl}/api/user/purchase`,{courseId:id},{headers:{Authorization:`Bearer ${token}`}})
+    if(data.success){
+      const {session_url} = data
+      window.location.replace(session_url)
+    }
+    else{
+      toast.error(data.message)
+    }
+    
+  } catch (error) {
+    toast.error(error.message)
+  }
+};
+
   useEffect(() => {
-    const findCourse = allCourses.find((course) => course._id === id);
-    setCourseData(findCourse || null);
-  }, [id, allCourses]);
+    fetchCourseData()
+  }, [fetchCourseData]);
+  useEffect(() => {
+
+    if(userData && courseData){
+      setIsAlreadyEnrolled(userData.enrolledCourses.includes(courseData._id))
+    }
+    
+  }, [userData, courseData]);
 
 
   
@@ -70,23 +123,23 @@ const CourseDetails = () => {
               ))}
             </div>
             <p className="text-blue-600 ">
-              ({courseData.courseRatings.length}
-              {courseData.courseRatings.length > 1 ? "ratings" : "rating"})
+              ({(courseData?.courseRatings?.length || 0)}
+              {(courseData?.courseRatings?.length || 0) > 1 ? "ratings" : "rating"})
             </p>
             <p>
-              {courseData.enrolledStudents.length}
-              {courseData.enrolledStudents.length > 1 ? "students" : " student"}
+              {(courseData?.enrolledStudents?.length || 0)}
+              {(courseData?.enrolledStudents?.length || 0) > 1 ? "students" : " student"}
             </p>
           </div>
 
           <p className="text-sm">
-            Course by <span className="text-blue-600">Future It College</span>
+            Course by <span className="text-blue-600">{courseData?.educator?.name}</span>
           </p>
 
           <div className="pt-8 text-gray-800">
             <h2 className="text-xl font-semibold">Course Structure</h2>
             <div className="pt-5">
-              {courseData.courseContent.map((chapter, index) => (
+              {Array.isArray(courseData?.courseContent) && courseData.courseContent.map((chapter, index) => (
                 <div
                   key={index}
                   className="border border-gray-300 bg-white mb-2 rounded"
@@ -120,7 +173,7 @@ const CourseDetails = () => {
                     }`}
                   >
                     <ul className="list-disc md:pl-10 pl-4 pr-4 py-2 text-gray-600 border-t border-gray-300">
-                      {chapter.chapterContent.map((lecture, index) => (
+                      {Array.isArray(chapter?.chapterContent) && chapter.chapterContent.map((lecture, index) => (
                         <li
                           key={index}
                           className="flex items-center gap-2 py-1"
@@ -232,7 +285,7 @@ const CourseDetails = () => {
                 <p>{CalculateNOofLecutres(courseData)}lessons</p>
               </div>
             </div>
-            <button className=" md:mt-t mt-4 w-full py-3 rounded bg-blue-600 text-white font-medium">
+            <button onClick={enrollCourse} className=" md:mt-t mt-4 w-full py-3 rounded bg-blue-600 text-white font-medium">
               {isAlreadyEnrolled ? "Already Enrolled" : "Enroll Now"}
             </button>
             <div className="pt-6">

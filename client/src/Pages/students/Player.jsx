@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from "react";
+import React, { useCallback, useContext, useEffect, useState } from "react";
 import { AppContext } from "../../context/Appcontext";
 import { useParams } from "react-router-dom";
 import { assets } from "../../assets/assets";
@@ -6,30 +6,101 @@ import humanizeDuration from "humanize-duration";
 import YouTube from "react-youtube";
 import Footer from "../../Components/students/Footer";
 import Rating from "../../Components/students/Rating";
+import axios from "axios";
+import { toast } from "react-toastify";
+import Loading from '../../Components/students/Loading'
 const Player = () => {
-  const { enrolledCourses, allCourses, calculateChapterTime } = useContext(AppContext);
+  const {
+    enrolledCourses,
+    calculateChapterTime,
+    backendUrl,
+    userData,
+    getToken,
+  } = useContext(AppContext);
   const { courseid } = useParams();
   const [courseData, setCourseData] = useState(null);
-  const [openSection, setOpenSection] = useState({})
-  const [playerData, setPlayerData] = useState(null)
-
-
+  const [openSection, setOpenSection] = useState({});
+  const [playerData, setPlayerData] = useState(null);
+  const [progressData, setProgressData] = useState(null);
+  const [initialRating, setInitialRating] = useState(0);
 
   const toggleSection = (index) => {
     setOpenSection((prev) => ({ ...prev, [index]: !prev[index] }));
   };
 
-  const getCourseData = () => {
-    const pools = [Array.isArray(enrolledCourses) ? enrolledCourses : [], Array.isArray(allCourses) ? allCourses : []];
-    const found = pools.flat().find((course) => course && course._id === courseid);
-    setCourseData(found || null);
-  };
-  useEffect(() => {
-    getCourseData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [courseid, enrolledCourses, allCourses]);
+  const getCourseData = useCallback(() => {
+    enrolledCourses.map((course) => {
+      if (course._id === courseid) {
+        setCourseData(course);
+        course.courseRating.map((items) => {
+          if (items.userId === userData._id) {
+            setInitialRating(items.rating);
+          }
+        });
+      }
+    });
+  }, [enrolledCourses, courseid, userData]);
 
-  return (
+  useEffect(() => {
+    if (enrolledCourses.length > 0) {
+      getCourseData();
+    }
+  }, [enrolledCourses, getCourseData]);
+
+
+  const markLectureAsComplete = async () => {
+    try {
+      const token = await getToken();
+      console.log('Marking lecture complete:', playerData.lectureId); // Debug log
+      const {data} = await axios.post(`${backendUrl}/api/user/update-course-progress`,{courseId:courseid,lectureId:playerData.lectureId},{headers:{Authorization:`Bearer ${token}`}})
+      if(data.success){
+        toast.success(data.message)
+        getCourseProgress()
+      }
+      else{
+        toast.error(data.message)
+      }
+    } catch (error) {
+      toast.error(error.message)
+    }
+  }
+
+
+const getCourseProgress = useCallback(async () => {
+  try {
+    const token = await getToken();
+    const {data} = await axios.post(`${backendUrl}/api/user/get-course-progress`,{courseId:courseid},{headers:{Authorization:`Bearer ${token}`}})
+    if(data.success){
+      console.log('Progress data received:', data.progressData); // Debug log
+      setProgressData(data.progressData)
+    }else{
+      toast.error(data.message)
+    }
+  }
+  catch (error) {
+    toast.error(error.message)
+  }
+}, [backendUrl, courseid, getToken])
+
+const handleRate = async(rating)=>{
+  try {
+    const token = await getToken()
+    const {data} = await axios.post(backendUrl+'/api/user/add-rating',{courseId:courseid,rating},{headers:{Authorization:`Bearer ${token}`}})
+    if(data.success){
+      toast.success(data.message)
+    }else{
+      toast.error(data.message)
+    }
+  } catch (error) {
+    toast.error(error.message)
+    
+  }
+}
+useEffect(()=>{
+  getCourseProgress()
+},[getCourseProgress])
+
+  return courseData? (
     <>
       <div className="p-4 sm:p-10 flex flex-col-reverse md:grid md:grid-cols-2 gap-10 md:px-36">
         {/* Left colum */}
@@ -37,7 +108,8 @@ const Player = () => {
           <h2 className="text-xl font-semibold"> Course Strucutre</h2>
 
           <div className="pt-5">
-            {courseData && Array.isArray(courseData.courseContent) &&
+            {courseData &&
+              Array.isArray(courseData.courseContent) &&
               courseData.courseContent.map((chapter, index) => (
                 <div
                   key={index}
@@ -72,43 +144,46 @@ const Player = () => {
                     }`}
                   >
                     <ul className="list-disc md:pl-10 pl-4 pr-4 py-2 text-gray-600 border-t border-gray-300">
-                      {Array.isArray(chapter.chapterContent) && chapter.chapterContent.map((lecture, index) => (
-                        <li
-                          key={index}
-                          className="flex items-center gap-2 py-1"
-                        >
-                          <img
-                            src={assets.play_icon}
-                            alt="play_icon"
-                            className="w-4 h-4"
-                          />
-                          <div className="flex items-center justify-between w-full text-gray-800 text-xs md:text-default">
-                            <p> {lecture.lectureTitle}</p>
-                            <div className="flex gap-2">
-                              {lecture.lectureUrl && (
-                                <p
-                                  onClick={() =>
-                                    setPlayerData({
-                                      ...lecture,chapter:index+1 , lecture:index+1
-                                    })
-                                  }
-                                  className="text-blue-500 cursor-pointer"
-                                >
-                             Watch
-                                </p>
-                              )}
-                              <p>
-                                {humanizeDuration(
-                                  lecture.lectureDuration * 60 * 1000,
-                                  {
-                                    units: ["h", "m"],
-                                  }
+                      {Array.isArray(chapter.chapterContent) &&
+                        chapter.chapterContent.map((lecture, index) => (
+                          <li
+                            key={index}
+                            className="flex items-center gap-2 py-1"
+                          >
+                            <img
+                              src={progressData && progressData.lectureCompleted.includes(lecture.lectureId)?assets.blue_tick_icon:assets.play_icon}
+                              alt="play_icon"
+                              className="w-4 h-4 mt-1"
+                            />
+                            <div className="flex items-center justify-between w-full text-gray-800 text-xs md:text-default">
+                              <p> {lecture.lectureTitle}</p>
+                              <div className="flex gap-2">
+                                {lecture.lectureUrl && (
+                                  <p
+                                    onClick={() =>
+                                      setPlayerData({
+                                        ...lecture,
+                                        chapter: index + 1,
+                                        lecture: index + 1,
+                                      })
+                                    }
+                                    className="text-blue-500 cursor-pointer"
+                                  >
+                                    Watch
+                                  </p>
                                 )}
-                              </p>
+                                <p>
+                                  {humanizeDuration(
+                                    lecture.lectureDuration * 60 * 1000,
+                                    {
+                                      units: ["h", "m"],
+                                    }
+                                  )}
+                                </p>
+                              </div>
                             </div>
-                          </div>
-                        </li>
-                      ))}
+                          </li>
+                        ))}
                     </ul>
                   </div>
                 </div>
@@ -116,33 +191,43 @@ const Player = () => {
           </div>
           <div className="flex items-center gap-2 py-3 mt-10 ">
             <h1 className="text-xl font-bold">Rate this course</h1>
-            <Rating initialRating={0}/>
+            <Rating initialRating={initialRating} onRate={handleRate} />
           </div>
         </div>
 
         {/* right column */}
         <div className="md:mt-10">
-          {playerData ?(
+          {playerData ? (
             <div>
-              <YouTube videoId={playerData.lectureUrl.split('/').pop()} opts={{playerVars:{
-                  autoplay:1
-                }}} iframeClassName="w-full aspect-video"/>
-                <div className="flex justify-between items-center mt-1">
-                  <p>{playerData.chapter}.{playerData.lecture}.{playerData.lectureTitle}</p>
-                  <button className="text-blue-600">
-                    {playerData && playerData.isCompleted ? "Completed" : "Mark Complete"}
-                  </button>
-                </div>
+              <YouTube
+                videoId={playerData.lectureUrl.split("/").pop()}
+                opts={{
+                  playerVars: {
+                    autoplay: 1,
+                  },
+                }}
+                iframeClassName="w-full aspect-video"
+              />
+              <div className="flex justify-between items-center mt-1">
+                <p>
+                  {playerData.chapter}.{playerData.lecture}.
+                  {playerData.lectureTitle}
+                </p>
+                <button onClick={()=>markLectureAsComplete()} className="text-blue-600">
+                  {progressData && playerData && progressData.lectureCompleted.includes(playerData.lectureId)
+                    ? "Completed"
+                    : "Mark Complete"}
+                </button>
+              </div>
             </div>
-          )
-        : <img src={courseData? courseData.courseThumbnail: ""} alt="" />  
-        }
-         
+          ) : (
+            <img src={courseData ? courseData.courseThumbnail : ""} alt="" />
+          )}
         </div>
       </div>
-      <Footer/>
+      <Footer />
     </>
-  );
+  ):<Loading/>
 };
 
 export default Player;

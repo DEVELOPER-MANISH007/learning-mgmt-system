@@ -1,73 +1,87 @@
 import React, { useContext, useEffect, useState, useCallback } from "react";
 import { AppContext } from "../../context/Appcontext";
 import Loading from "../../Components/students/Loading";
+import axios from "axios";
+import { toast } from "react-toastify";
 
 const Mycourse = () => {
-  const { allCourses, currency } = useContext(AppContext);
+	const { backendUrl, currency, getToken,isEducator } = useContext(AppContext);
 
-  const [course, setCourse] = useState([]);
+	const [course, setCourse] = useState([]);
 
-  const fetchEducatorCourse = useCallback(() => {
-    setCourse(allCourses || []);
-  }, [allCourses]);
+	const fetchEducatorCourse = useCallback(async () => {
+		try {
+			const token = await getToken();
+			const { data } = await axios.get(backendUrl + '/api/educator/courses', {
+				headers: { Authorization: `Bearer ${token}` }
+			});
+			data.success && setCourse(data.courses)
+		} catch (error) {
+			toast.error(error.message);
+		}
+	}, [backendUrl, getToken]);
 
-  useEffect(() => {
-    fetchEducatorCourse();
-  }, [fetchEducatorCourse]);
 
-  return course && course.length > 0 ? (
-    <div className="flex flex-col h-screen items-start justify-between md:p-8 md:pb-0 p-4 pb-0 ">
-      <div className="w-full">
-        <h2 className="pb-4 text-lg font-medium"> My Course</h2>
-        <div className="flex flex-col items-center max-w-4xl w-full overflow-hidden rounded-md bg-white border border-gray-500/20">
-          <table className="md:table-auto table-fixed w-full overflow-hidden">
-            <thead className="text-gray-900 border-b border-gray-500/20 text-sm text-left">
-              <tr>
-                <th className="px-4 py-3 font-semibold truncate">Course</th>
-                <th className="px-4 py-3 font-semibold truncate">Earnings</th>
-                <th className="px-4 py-3 font-semibold truncate">Students</th>
-                <th className="px-4 py-3 font-semibold truncate">
-                  Published ON
-                </th>
-              </tr>
-            </thead>
-            <tbody className="text-sm text-gray-500">
-              {course.map((course) => (
-                <tr key={course._id} className="border-b border-gray-500/20">
-                  <td className="md:px-4 pl-2 md:pl-4 py-3 flex items-center space-x-3 truncate">
-                    <img
-                      src={course.courseThumbnail}
-                      alt="course Image"
-                      className="w-16"
-                    />
-                    <span className="truncate hidden md:block">
-                      {course.courseTitle}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 ">
-                    {currency}
-                    {Math.floor(
-                      course.enrolledStudents.length *
-                        (course.coursePrice -
-                          (course.discount * course.coursePrice) / 100)
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    {course.enrolledStudents.length}
-                  </td>
-                  <td className="px-4 py-">
-                    {new Date(course.createdAt).toLocaleDateString()}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  ) : (
-    <Loading />
-  );
+
+	useEffect(() => {
+		if(isEducator){
+      fetchEducatorCourse()
+    }
+	}, [isEducator]);
+
+	return course && course.length > 0 ? (
+		<div className="flex flex-col h-screen items-start justify-between md:p-8 md:pb-0 p-4 pb-0 ">
+			<div className="w-full">
+				<h2 className="pb-4 text-lg font-medium"> My Course</h2>
+				<div className="flex flex-col items-center max-w-4xl w-full overflow-hidden rounded-md bg-white border border-gray-500/20">
+					<table className="md:table-auto table-fixed w-full overflow-hidden">
+						<thead className="text-gray-900 border-b border-gray-500/20 text-sm text-left">
+							<tr>
+								<th className="px-4 py-3 font-semibold truncate">Course</th>
+								<th className="px-4 py-3 font-semibold truncate">Earnings</th>
+								<th className="px-4 py-3 font-semibold truncate">Students</th>
+								<th className="px-4 py-3 font-semibold truncate">
+									Published ON
+								</th>
+							</tr>
+						</thead>
+						<tbody className="text-sm text-gray-500">
+							{course.map((course) => (
+								<tr key={course._id} className="border-b border-gray-500/20">
+									<td className="md:px-4 pl-2 md:pl-4 py-3 flex items-center space-x-3 truncate">
+										<img
+											src={course.courseThumbnail}
+											alt="course Image"
+											className="w-16"
+										/>
+										<span className="truncate hidden md:block">
+											{course.courseTitle}
+										</span>
+									</td>
+									<td className="px-4 py-3 ">
+										{currency}
+										{Math.floor(
+											course.enrolledStudents.length *
+												(course.coursePrice -
+													(course.discount * course.coursePrice) / 100)
+										)}
+									</td>
+									<td className="px-4 py-3">
+										{course.enrolledStudents.length}
+									</td>
+									<td className="px-4 py-">
+										{new Date(course.createdAt).toLocaleDateString()}
+									</td>
+								</tr>
+							))}
+						</tbody>
+					</table>
+				</div>
+			</div>
+		</div>
+	) : (
+		<Loading />
+	);
 };
 
 export default Mycourse;

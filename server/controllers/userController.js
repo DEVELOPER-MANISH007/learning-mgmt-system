@@ -1,4 +1,5 @@
 import UserModel from "../Models/userModel.js";
+import { clerkClient } from "@clerk/express";
 import { Course } from "../Models/Course.js";
 import Purchase from "../Models/Purchase.js";
 import Stripe from "stripe";
@@ -7,26 +8,38 @@ import CourseProgress from "../Models/courseProgress.js";
 export const getUserData = async (req, res) => {
   try {
     const userId = req.auth().userId;
-
-    const user = await UserModel.findById(userId);
+    let user = await UserModel.findById(userId);
     if (!user) {
-      return res.json({ success: false, message: "User not found" });
+      // Create the user in Mongo from Clerk profile if missing
+      try {
+        const clerkUser = await clerkClient.users.getUser(userId);
+        const name = `${clerkUser.firstName || ""} ${clerkUser.lastName || ""}`.trim();
+        const email = clerkUser.emailAddresses?.[0]?.emailAddress || "";
+        const imageUrl = clerkUser.imageUrl || "";
+        user = await UserModel.create({ _id: userId, name, email, imageUrl });
+      } catch (e) {
+        return res.json({ success: false, message: "User not found" });
+      }
     }
 
-    res.json({ success: true, data: user });
+    res.json({ success: true, user });
   } catch (error) {
     res.json({ success: false, message: error.message });
   }
 };
+
+
 
 //users enrolled coruses with lecture link
 
 export const userEnrolledCourses = async (req, res) => {
   try {
     const userId = req.auth().userId;
-    const userData = await UserModel.findById(userId).populate(
-      "enrolledCourses"
-    );
+    const userData = await UserModel.findById(userId).populate("enrolledCourses");
+    if (!userData) {
+      // Gracefully handle when webhook hasn't created the user yet
+      return res.json({ success: true, enrolledCourses: [] });
+    }
     res.json({ success: true, enrolledCourses: userData.enrolledCourses });
   } catch (error) {
     res.json({ success: false, message: error.message });
@@ -41,14 +54,20 @@ export const PurchaseCourse = async (req, res) => {
     const userId = req.auth().userId;
     const userData = await UserModel.findById(userId);
     const courseData = await Course.findById(courseId);
-    if (!userData || !courseData) {
-      return res.json({
-        success: false,
-        message: "Data not found (courseData or userData not found)",
-      });
+    if (!courseData) {
+      return res.json({ success: false, message: "Course not found" });
     }
+    if (!userData) {
+      // If user record doesn't exist yet, create it from Clerk data in token
+      const clerkUserId = userId;
+      const email = req.auth().sessionClaims?.email || "";
+      const name = req.auth().sessionClaims?.name || "";
+      const imageUrl = req.auth().sessionClaims?.picture || "";
+      await UserModel.create({ _id: clerkUserId, email, name, imageUrl });
+    }
+    const freshUser = userData || await UserModel.findById(userId);
     // Prevent purchase if already enrolled
-    if (userData.enrolledCourses?.some((id) => id.toString() === courseId.toString())) {
+    if (freshUser.enrolledCourses?.some((id) => id.toString() === courseId.toString())) {
       return res.json({ success: false, message: "Already enrolled" });
     }
     // Prevent duplicate paid purchases
@@ -61,7 +80,7 @@ export const PurchaseCourse = async (req, res) => {
       return res.json({ success: false, message: "Course not available" });
     }
     // Compute numeric discounted amount (dollars)
-    const discounted = courseData.courPrice * (1 - ((courseData.discount || 0) / 100));
+    const discounted = (Number(courseData.coursePrice) || 0) * (1 - ((Number(courseData.discount) || 0) / 100));
     const amountDollars = Math.round(discounted * 100) / 100; // keep 2dp as Number
     const purchaseData = {
       courseId: courseData._id,
@@ -97,8 +116,9 @@ export const PurchaseCourse = async (req, res) => {
     // Remove trailing slash if present
     clientUrl = clientUrl.replace(/\/$/, '');
 
+    const serverUrl = process.env.PUBLIC_SERVER_URL || 'http://localhost:5000';
     const session = await stripeInstance.checkout.sessions.create({
-      success_url: `${clientUrl}/loading/my-enrollments`,
+      success_url: `${serverUrl}/api/user/confirm-checkout?session_id={CHECKOUT_SESSION_ID}&redirect=${encodeURIComponent(clientUrl + '/loading/my-enrollments')}`,
       cancel_url: `${clientUrl}/`,
       line_items: line_items,
       mode: 'payment',
@@ -115,6 +135,61 @@ export const PurchaseCourse = async (req, res) => {
   }
 };
 
+//todo ----------------------------------------------------------------------------------------------------->
+// ye strripe kaam nahi kr rha to isliye use kiya hai mene baad me isko remove krke stirpe check krna hai
+//  or isko remove kr dena hai pusblisble key or account dobarra banana hai stipe ka or ye remove krna hai
+//* ---------------------------------------------------------------------------------------------------->
+// Confirm checkout without relying on webhooks
+export const confirmCheckout = async (req, res) => {
+  try {
+    const { session_id, redirect } = req.query;
+    if (!session_id) {
+      return res.status(400).json({ success: false, message: 'Missing session_id' });
+    }
+    const stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY);
+    const session = await stripeInstance.checkout.sessions.retrieve(session_id);
+    const { purchaseId } = session?.metadata || {};
+    if (!purchaseId) {
+      return res.status(400).json({ success: false, message: 'Missing purchaseId in session' });
+    }
+
+    const purchaseData = await Purchase.findById(purchaseId);
+    if (!purchaseData) {
+      return res.status(404).json({ success: false, message: 'Purchase not found' });
+    }
+    if (purchaseData.status !== 'completed' && session.payment_status === 'paid') {
+      const userData = await UserModel.findById(purchaseData.userId);
+      const courseData = await Course.findById(purchaseData.courseId.toString());
+      if (userData && courseData) {
+        if (!courseData.enrolledStudents.some(id => id.toString() === userData._id.toString())) {
+          courseData.enrolledStudents.push(userData._id);
+          await courseData.save();
+        }
+        if (!userData.enrolledCourses.some(id => id.toString() === courseData._id.toString())) {
+          userData.enrolledCourses.push(courseData._id);
+          await userData.save();
+        }
+      }
+      purchaseData.status = 'completed';
+      await purchaseData.save();
+    }
+
+    const redirectUrl = redirect || (process.env.PUBLIC_CLIENT_URL || 'http://localhost:5173') + '/loading/my-enrollments';
+    res.redirect(302, redirectUrl);
+  } catch (error) {
+    // If redirect is provided, fail-soft by redirecting
+    const redirectUrl = req.query?.redirect || (process.env.PUBLIC_CLIENT_URL || 'http://localhost:5173');
+    try {
+      return res.redirect(302, redirectUrl);
+    } catch (_) {
+      return res.status(500).json({ success: false, message: error.message });
+    }
+  }
+}
+//todo ----------------------------------------------------------------------------------------------------->
+// ye strripe kaam nahi kr rha to isliye use kiya hai mene baad me isko remove krke stirpe check krna hai
+//  or isko remove kr dena hai pusblisble key or account dobarra banana hai stipe ka or ye remove krna hai
+//* ---------------------------------------------------------------------------------------------------->
 
 
 //*Update User Course Progress

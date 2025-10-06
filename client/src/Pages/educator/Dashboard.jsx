@@ -2,14 +2,30 @@ import React, { useContext, useEffect, useState } from "react";
 import { AppContext } from "../../context/Appcontext";
 import { assets, dummyDashboardData } from "../../assets/assets";
 import Loading from "../../Components/students/Loading";
+import axios from "axios";
+import { toast } from "react-toastify";
 
 const Dashboard = () => {
-  const { currency } = useContext(AppContext);
+  const { currency, backendUrl, getToken, isEducator } = useContext(AppContext);
 
   const [dashboardData, setDashboardData] = useState(null);
 
   const fetchDashboardData = async () => {
-    setDashboardData(dummyDashboardData);
+    try {
+      const token = await getToken();
+      const { data } = await axios.get(backendUrl + "/api/educator/dashboard", {
+        // Note: include a space after 'Bearer' so the auth header is valid
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (data.success) {
+        // Server returns payload under `data`, not `dashboardData`
+        setDashboardData(data.data);
+      } else {
+        toast.error(data.message || "Failed to fetch dashboard data");
+      }
+    } catch (error) {
+      toast.error(error.message);
+    }
   };
   useEffect(() => {
     fetchDashboardData();
@@ -52,38 +68,35 @@ const Dashboard = () => {
         <div>
           <h2 className="pb-4 text-lg font-medium">Latest Enrollments</h2>
           <div className="flex flex-col items-center max-w-4xl w-full overflow-hidden rounded-md bg-white border border-gray-500/20">
-          <table className="table-fixed md:table-auto w-full overflow-hidden">
-            <thead className="text-gray-900 border-b border-gray-500/20 text-sm text-left">
-            <tr>
-              <th className="px-4 py-3 font-semibold  text-center hidden sm:table-cell">
-              #
-              </th>
-              <th className="px-4 py-3 font-semibold ">
-              Student Name
-              </th>
-              <th className="px-4 py-3 font-semibold ">
-              Student Name
-              </th>
-            </tr>
-            </thead>
-      <tbody className="text-sm text-gray-500">
-        {dashboardData.enrolledStudentsData.map((item,index)=>(
-          <tr key={index} className="border-b border-gray-500/20">
-            <td className="px-4 py-3 text-center hidden sm:table-cell ">
-            {index+1}
-            </td>
-          <td className="md:px-4 px2 py-3 flex items-center space-x-3">
-          <img src={item.student.imageUrl} className="w-9 h-9 rounded-full" alt="" />
-          <span className="truncate">{item.student.name}</span>
-          </td>
-          <td className="px-4 py-3 truncate">{item.courseTitle}</td>
-
-          </tr>
-        ))}
-
-      </tbody>
-
-          </table>
+            <table className="table-fixed md:table-auto w-full overflow-hidden">
+              <thead className="text-gray-900 border-b border-gray-500/20 text-sm text-left">
+                <tr>
+                  <th className="px-4 py-3 font-semibold  text-center hidden sm:table-cell">
+                    #
+                  </th>
+                  <th className="px-4 py-3 font-semibold ">Student Name</th>
+                  <th className="px-4 py-3 font-semibold ">Student Name</th>
+                </tr>
+              </thead>
+              <tbody className="text-sm text-gray-500">
+                {dashboardData.enrolledStudentsData.map((item, index) => (
+                  <tr key={index} className="border-b border-gray-500/20">
+                    <td className="px-4 py-3 text-center hidden sm:table-cell ">
+                      {index + 1}
+                    </td>
+                    <td className="md:px-4 px2 py-3 flex items-center space-x-3">
+                      <img
+                        src={item.student.imageUrl}
+                        className="w-9 h-9 rounded-full"
+                        alt=""
+                      />
+                      <span className="truncate">{item.student.name}</span>
+                    </td>
+                    <td className="px-4 py-3 truncate">{item.courseTitle}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>

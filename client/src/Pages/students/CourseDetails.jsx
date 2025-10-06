@@ -30,6 +30,21 @@ const CourseDetails = () => {
     getToken,
   } = useContext(AppContext);
 
+  // Helper: extract YouTube video id from multiple URL formats
+  const extractYouTubeId = (url) => {
+    if (!url || typeof url !== 'string') return null;
+    try {
+      const u = new URL(url);
+      if (u.hostname === 'youtu.be') return u.pathname.slice(1);
+      if (u.searchParams.has('v')) return u.searchParams.get('v');
+      const parts = u.pathname.split('/').filter(Boolean);
+      return parts.length ? parts[parts.length - 1] : null;
+    } catch (e) {
+      const match = url.match(/(?:v=|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+      return match ? match[1] : null;
+    }
+  };
+
 
   
 const fetchCourseData = useCallback(async () => {
@@ -189,7 +204,7 @@ const enrollCourse = async () => {
                               {lecture.isPreviewFree && (
                                 <p 
                                 onClick={()=>setPlayerData({
-                                  videoId:lecture.lectureUrl.split('/').pop()
+                                  videoId: extractYouTubeId(lecture.lectureUrl)
                                 })}
                                 className="text-blue-500 cursor-pointer">
                                   Preview

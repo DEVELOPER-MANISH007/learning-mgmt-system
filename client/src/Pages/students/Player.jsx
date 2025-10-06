@@ -100,6 +100,25 @@ useEffect(()=>{
   getCourseProgress()
 },[getCourseProgress])
 
+  // Helper: extract YouTube video id from multiple URL formats
+  const extractYouTubeId = (url) => {
+    if (!url || typeof url !== 'string') return null;
+    try {
+      const u = new URL(url);
+      // youtu.be short link
+      if (u.hostname === 'youtu.be') return u.pathname.slice(1);
+      // youtube.com watch?v=ID
+      if (u.searchParams.has('v')) return u.searchParams.get('v');
+      // fallback to last path segment
+      const parts = u.pathname.split('/').filter(Boolean);
+      return parts.length ? parts[parts.length - 1] : null;
+    } catch (e) {
+      // If it's not a valid URL, try heuristics
+      const match = url.match(/(?:v=|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+      return match ? match[1] : null;
+    }
+  };
+
   return courseData? (
     <>
       <div className="p-4 sm:p-10 flex flex-col-reverse md:grid md:grid-cols-2 gap-10 md:px-36">
@@ -200,7 +219,7 @@ useEffect(()=>{
           {playerData ? (
             <div>
               <YouTube
-                videoId={playerData.lectureUrl.split("/").pop()}
+                videoId={extractYouTubeId(playerData.lectureUrl)}
                 opts={{
                   playerVars: {
                     autoplay: 1,

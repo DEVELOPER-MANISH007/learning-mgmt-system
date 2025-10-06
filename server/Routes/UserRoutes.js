@@ -2,7 +2,7 @@ import express from 'express';
 import UserModel from '../Models/userModel.js';
 
 // -------------------------------------------------------------------------->temp hai
-import { getUserData, userEnrolledCourses, PurchaseCourse, updateUserCourseProgress, getUserCourseProgress, addUserRating, confirmCheckout } from '../controllers/userController.js';
+import { getUserData, userEnrolledCourses, PurchaseCourse, updateUserCourseProgress, getUserCourseProgress, addUserRating, confirmCheckout, getEnrolledCourseById } from '../controllers/userController.js';
 // -------------------------------------------------------------------------------->
 
  const UserRouter = express.Router();
@@ -11,6 +11,7 @@ import { getUserData, userEnrolledCourses, PurchaseCourse, updateUserCourseProgr
 
 UserRouter.get('/data',getUserData);
 UserRouter.get('/enrolled-courses',userEnrolledCourses);
+UserRouter.get('/enrolled-courses/:id', getEnrolledCourseById);
 UserRouter.post('/purchase',PurchaseCourse);
 UserRouter.post('/enroll-course',PurchaseCourse); // alias for client compatibility
 // --------------------------------------------------------------------------->

@@ -36,6 +36,7 @@ const {backendUrl,getToken} = useContext(AppContext)
     lectureUrl: "",
     isPreviewFree: false,
   });
+  const [popupPosition, setPopupPosition] = useState({ top: 0, left: 0 });
 
 
   const handleChapter = (action,chapterId)=>{
@@ -71,12 +72,19 @@ const {backendUrl,getToken} = useContext(AppContext)
       }
 
 
-const handleLecture = (action,chapterId,lectureIndex)=>{
+const handleLecture = (action,chapterId,lectureIndex,e)=>{
 
   if(action==='add'){
     setCurrentChapterId(chapterId)
     setShowPopup(true)
-
+    // Calculate position based on click event
+    if(e) {
+      const rect = e.target.getBoundingClientRect();
+      setPopupPosition({
+        top: rect.bottom + window.scrollY,
+        left: rect.left + window.scrollX
+      });
+    }
   }else if(action==='remove'){
     setChapters((prevChapters) => {
       const nextChapters = prevChapters.map((chapter) => ({ ...chapter }));
@@ -171,7 +179,7 @@ if(data.success){
 
 
   return (
-    <div className="h-screen overflow-sroll flex flex-col items-start     justify-between md:p-8 md:pb-0 p-4 pt-8 pb-0">
+    <div className="h-screen overflow-auto flex flex-col items-start justify-between md:p-8 md:pb-0 p-4 pt-8 pb-0">
       <form onSubmit ={handleSubmit} className="flex flex-col gap-4 max-w-md w-full text-gray-500">
         <div className="flex flex-col gap-1">
           <p>Course Title</p>
@@ -202,27 +210,36 @@ if(data.success){
             />
           </div>
 
-          <div className="flex md:flex-row fflex-col items-center gapp-3">
+          <div className="flex flex-col gap-3">
             <p>Course Thumbnail</p>
-            <label htmlFor="thumbnailImage" className="flex items-center gap-3">
-              <img
-                src={assets.file_upload_icon}
-                alt=""
-                className="p-3 bg-blue-500 rounded"
-              />
+            <div className="flex items-center gap-3">
+              <div className="w-[100px] h-[100px] rounded-md overflow-hidden">
+                {image ? (
+                  <img
+                    src={URL.createObjectURL(image)}
+                    alt="course"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full bg-gray-200 flex items-center justify-center">
+                    <img src={assets.file_upload_icon} alt="upload" className="w-8 h-8" />
+                  </div>
+                )}
+              </div>
+              <label
+                htmlFor="thumbnailImage"
+                className="py-2 px-3 bg-blue-500 text-white rounded cursor-pointer"
+              >
+                Upload
+              </label>
               <input
                 type="file"
                 id="thumbnailImage"
+                className="hidden"
                 onChange={(e) => setImage(e.target.files[0])}
                 accept="image/*"
-                hidden
               />
-              <img
-                src={image ? URL.createObjectURL(image) : " "}
-                className="max-h-10"
-                alt=""
-              />
-            </label>
+            </div>
           </div>
         </div>
         <div className="flex flex-col gap-1">
@@ -254,15 +271,22 @@ if(data.success){
                   <img onClick={()=>handleLecture('remove',chapter.chapterId,lectureIndex)} src={assets.cross_icon} alt="" className="cursor-pointer" />
                 </div>
               ))}
-              <div onClick={()=>handleLecture('add',chapter.chapterId)} className="inline-flex bg-blue-200 p-2 rounded cursor-pointer">+Add Lecture</div>
+              <div onClick={(e)=>handleLecture('add',chapter.chapterId,null,e)} className="inline-flex bg-blue-200 p-2 rounded cursor-pointer">+Add Lecture</div>
             </div>
           )}
         </div>
       ))}
       <div onClick={()=>{handleChapter('add')}} className="flex justify-center items-center bg-blue-100 p-2 rounded-lg cursor-pointer" >+Add Chapter</div>
       {showPopup &&(
-        <div className="fixed inset-0 flex items-center justify-center z-50 animate-fadeIn">
-          <div className="bg-white text-gray-700 p-6 rounded-xl shadow-2xl relative w-full max-w-md mx-4 transform transition-all duration-300 ease-out animate-slideUp border border-gray-100">
+        <div className="fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-50">
+          <div 
+            className="bg-white text-gray-700 p-6 rounded-xl shadow-2xl relative w-full max-w-md mx-4 border border-gray-100"
+            style={{
+              position: 'absolute',
+              top: `${Math.min(popupPosition.top, window.innerHeight - 400)}px`,
+              left: `${Math.min(popupPosition.left, window.innerWidth - 300)}px`
+            }}
+          >
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold text-gray-800">Add New Lecture</h2>
               <button 
@@ -278,7 +302,7 @@ if(data.success){
                 <label className="block text-sm font-medium text-gray-700 mb-2">Lecture Title</label>
                 <input 
                   type="text" 
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 outline-none" 
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" 
                   value={lectureDetails.lectureTitle} 
                   onChange={(e)=>setLectureDetails({...lectureDetails,lectureTitle:e.target.value})}
                   placeholder="Enter lecture title"
@@ -289,7 +313,7 @@ if(data.success){
                 <label className="block text-sm font-medium text-gray-700 mb-2">Duration (minutes)</label>
                 <input 
                   type="number" 
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 outline-none" 
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" 
                   value={lectureDetails.lectureDuration}  
                   onChange={(e) =>setLectureDetails({...lectureDetails,lectureDuration:e.target.value})}
                   placeholder="Enter duration"
@@ -300,7 +324,7 @@ if(data.success){
                 <label className="block text-sm font-medium text-gray-700 mb-2">Lecture URL</label>
                 <input 
                   type="url" 
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 outline-none" 
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" 
                   value={lectureDetails.lectureUrl}  
                   onChange={(e) =>setLectureDetails({...lectureDetails,lectureUrl:e.target.value})}
                   placeholder="https://example.com/video"
@@ -325,14 +349,14 @@ if(data.success){
               <button 
                 type="button" 
                 onClick={()=>setShowPopup(false)}
-                className="flex-1 px-4 py-3 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-200 font-medium"
+                className="flex-1 px-4 py-3 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium"
               >
                 Cancel
               </button>
               <button 
                 type="button" 
                 onClick={addLecture}
-                className="flex-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white px-4 py-3 rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all duration-200 font-medium shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                className="flex-1 bg-blue-500 hover:bg-blue-600 text-white px-4 py-3 rounded-lg transition-colors font-medium"
               >
                 Add Lecture
               </button>

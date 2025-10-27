@@ -46,6 +46,42 @@ export const userEnrolledCourses = async (req, res) => {
   }
 };
 
+// Return full course details (including lecture URLs) for an enrolled user
+export const getEnrolledCourseById = async (req, res) => {
+  try {
+    const userId = req.auth().userId;
+    const { id: courseId } = req.params;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+
+    const user = await UserModel.findById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    const isEnrolled = user.enrolledCourses?.some(
+      (id) => id.toString() === courseId.toString()
+    );
+    if (!isEnrolled) {
+      return res
+        .status(403)
+        .json({ success: false, message: "Access denied: not enrolled" });
+    }
+
+    const course = await Course.findById(courseId).populate({ path: "educator" });
+    if (!course) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Course not found" });
+    }
+
+    return res.json({ success: true, course });
+  } catch (error) {
+    return res.json({ success: false, message: error.message });
+  }
+};
+
 // Purchase Course
 export const PurchaseCourse = async (req, res) => {
   try {
